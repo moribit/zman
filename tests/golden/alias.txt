@@ -1,0 +1,23 @@
+std.ArrayListUnmanaged
+──────────────────────
+
+TYPE FACTORY
+
+SEMANTICS
+  Status      resolved
+  Alias of    std.ArrayList
+  Returns     type
+
+SIGNATURE
+  pub fn ArrayList(comptime T: type) type
+
+DESCRIPTION
+  Fixture paragraph with `T`.
+
+  Another unchanged paragraph.
+
+SOURCE
+  /fixture/std.zig:52
+
+ZIG VERSION
+  0.17.0

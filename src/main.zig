@@ -80,7 +80,7 @@ fn execute(init: std.process.Init) !void {
         }
         const manual = man.reference(e.fq_name);
         if (options.command == .man and !options.json) {
-            try std.Io.File.stdout().writeStreamingAll(io, try std.fmt.allocPrint(a, "Zig API:\n    {s}\n\n{s}\n", .{ e.fq_name, try man.describe(a, manual) }));
+            try std.Io.File.stdout().writeStreamingAll(io, try render.manualLink(a, e.fq_name, manual, color));
             const ref = manual orelse return error.ManMappingNotFound;
             man.open(io, ref, "man") catch |err| {
                 if (err == error.ManualPageNotInstalled) {
@@ -91,9 +91,9 @@ fn execute(init: std.process.Init) !void {
             };
             return;
         }
-        var output = if (options.json) try render.json(a, e, env.version) else if (options.command == .source) try render.source(a, io, e, color) else try render.human(a, e, env.version, color);
+        var output = if (options.json) try render.json(a, e, env.version) else if (options.command == .source) try render.source(a, io, e, color) else try render.humanWithManual(a, e, env.version, color, options.man);
         if (options.source and !options.json and options.command != .source) output = try std.mem.concat(a, u8, &.{ output, "\n", try render.source(a, io, e, color) });
-        if (options.man and !options.json) output = try std.mem.concat(a, u8, &.{ "ZIG DOCUMENTATION\n\n", output, "\n", try man.describe(a, manual) });
+        if (options.man and !options.json and options.command == .source) output = try std.mem.concat(a, u8, &.{ output, try render.manual(a, manual, color) });
         try pager.output(a, io, init.environ_map, output, if (options.json) .never else options.pager, tty);
         return;
     };

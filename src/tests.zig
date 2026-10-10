@@ -22,8 +22,51 @@ test "public AST declarations, docs, nested and imports" {
     const hits = try search.search(a, index.entries, "open file", 10);
     try std.testing.expectEqualStrings("std.Box.openFile", index.entries[hits[0].entry_index].fq_name);
     const human = try render.human(a, read, "0.17.0", false);
-    const expected = try std.fmt.allocPrint(a, "std.read\n\nfunction\n\nSIGNATURE\n\npub fn read(buf: []u8) usize\n\nDESCRIPTION\n\nReads bytes, unchanged.\n\nSOURCE\n\n{s}:3\n\nZIG VERSION\n\n0.17.0\n", .{read.source_path});
+    const expected = try std.fmt.allocPrint(a, "std.read\n────────\n\nFUNCTION\n\nSEMANTICS\n  Status      syntax_only\n\nSIGNATURE\n  pub fn read(buf: []u8) usize\n\nDESCRIPTION\n  Reads bytes, unchanged.\n\nSOURCE\n  {s}:3\n\nZIG VERSION\n  0.17.0\n", .{read.source_path});
     try std.testing.expectEqualStrings(expected, human);
+}
+
+test "human hierarchy plain goldens and ANSI boundaries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const styles = @import("style.zig");
+    const Entry = @import("index.zig").Entry;
+    const alias: Entry = .{ .fq_name = "std.ArrayListUnmanaged", .short_name = "ArrayListUnmanaged", .kind = .function, .semantic_kind = .type_factory, .resolution = .resolved, .alias_of = "std.ArrayList", .returns_type = true, .signature = "pub fn ArrayList(comptime T: type) type", .docs = "/// Fixture paragraph with `T`.\n///\n/// Another unchanged paragraph.", .source_path = "/fixture/std.zig", .source_line = 52, .declaration_start = 0, .declaration_end = 1 };
+    const plain = try render.human(a, alias, "0.17.0", false);
+    try std.testing.expectEqualStrings(try @import("index.zig").read(a, std.testing.io, "tests/golden/alias.txt"), plain);
+    const colored = try render.human(a, alias, "0.17.0", true);
+    try std.testing.expectEqualStrings(plain, try stripAnsi(a, colored));
+    for ([_]struct { styles.Role, []const u8 }{
+        .{ .title, alias.fq_name }, .{ .kind, "TYPE FACTORY" }, .{ .section, "SEMANTICS" }, .{ .section, "SIGNATURE" }, .{ .metadata_key, "Status" }, .{ .symbol, "std.ArrayList" }, .{ .secondary, "/fixture/std.zig:52" }, .{ .keyword, "pub" },
+    }) |boundary| {
+        try std.testing.expect(std.mem.indexOf(u8, colored, try std.mem.concat(a, u8, &.{ styles.ansi(boundary[0]), boundary[1], styles.reset })) != null);
+    }
+    try std.testing.expect(std.mem.indexOf(u8, colored, "\n  Fixture paragraph with `T`.\n\n  Another unchanged paragraph.\n") != null);
+    const write: Entry = .{ .fq_name = "std.os.linux.write", .short_name = "write", .kind = .function, .semantic_kind = .function, .resolution = .resolved, .signature = "pub fn write(fd: fd_t, buf: [*]const u8, count: usize) usize", .docs = "", .source_path = "/fixture/os/linux.zig", .source_line = 1787, .declaration_start = 0, .declaration_end = 1 };
+    const manual = try render.humanWithManual(a, write, "0.17.0", false, true);
+    try std.testing.expectEqualStrings(try @import("index.zig").read(a, std.testing.io, "tests/golden/manual.txt"), manual);
+    try std.testing.expectEqualStrings(manual, try stripAnsi(a, try render.humanWithManual(a, write, "0.17.0", true, true)));
+    const json = try render.json(a, alias, "0.17.0");
+    try std.testing.expect(std.mem.indexOfScalar(u8, json, 27) == null);
+    const parsed = try std.json.parseFromSlice(std.json.Value, a, json, .{});
+    try std.testing.expectEqualStrings(alias.signature, parsed.value.object.get("signature").?.string);
+    try std.testing.expectEqualStrings(alias.docs, parsed.value.object.get("docs").?.string);
+    try std.testing.expectEqualStrings("autodoc", parsed.value.object.get("semantic_backend").?.string);
+}
+
+fn stripAnsi(a: std.mem.Allocator, bytes: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        if (bytes[i] == 27) {
+            i = (std.mem.indexOfScalarPos(u8, bytes, i, 'm') orelse return error.InvalidAnsi) + 1;
+        } else {
+            try out.append(a, bytes[i]);
+            i += 1;
+        }
+    }
+    return out.items;
 }
 
 test "cache roundtrip, corruption and source invalidation" {

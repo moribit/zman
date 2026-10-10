@@ -1,0 +1,23 @@
+std.os.linux.write
+──────────────────
+
+FUNCTION
+
+SEMANTICS
+  Status      resolved
+
+SIGNATURE
+  pub fn write(fd: fd_t, buf: [*]const u8, count: usize) usize
+
+DESCRIPTION
+  No Zig documentation attached.
+
+SYSTEM MANUAL
+  Host page   write(2)
+  Relation    direct
+
+SOURCE
+  /fixture/os/linux.zig:1787
+
+ZIG VERSION
+  0.17.0

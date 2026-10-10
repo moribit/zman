@@ -279,3 +279,142 @@ Phase 4 で compiler/autodoc の semantic 情報を利用する場合、alias �
     helper 初回 compilation を含む reindex は約13–17秒、既存 helper で最終 reindex は0.712秒。cached query は compiler/helper を起動しません。最終 `open file` の1位は `std.Io.Dir.openFile`、続いて `std.Io.failingDirOpenFile`、`std.Io.Dir.OpenFileOptions`。query engine は引き続き deterministic ranking です。
 29. **Dependencies:** Zig stdlib のみ、third-party/build/runtime library dependency は0。libc link なし、SQLite/PCRE/tree-sitter/WASM runtime なし。index rebuild は PATH の installed Zig compiler を使用。man/pager/editor は optional external host tools、通常の lookup に必須ではありません。release/CI の compiler download は build automation のみに限定。
 30. **Phase 5 candidates:** compiler が安定した machine-readable semantic/autodoc export を提供した場合の backend、comptime-dependent target の official evaluation、既存 compiler metadata が提供する generic instances、より詳細な relationship browsing、man mapping 拡充、macOS signing/notarization。独自 semantic analyzer やネットワーク document retrieval は今回導入していません。
+
+---
+
+# 1.0.0 — Terminal visual hierarchy
+
+## Architecture and visual roles
+
+`render.zig` に小さな HumanRenderer を置き、title/section/body/metadata/manual の配置を統一しました。JSON renderer と semantic index は変更していません。`man.zig` の human formatting は renderer へ移し、mapping と process execution は維持しています。
+
+`style.zig` が UI と lexer の Role → ANSI mapping を集約します。新規 UI accent は cyan 1色です。
+
+| Role | ANSI | Usage |
+| --- | --- | --- |
+| title / section | bold cyan (`1;36`) | symbol、全 section headings |
+| kind | bold (`1`) | TYPE FACTORY / FUNCTION 等 |
+| metadata_key / secondary | dim (`2`) | Status 等の label、separator、source path、version |
+| symbol / builtin | cyan (`36`) | alias reference、host page、builtin/type-like tokens |
+| keyword | magenta (`35`) | 既存 Zig syntax |
+| literal / number | green (`32`) / yellow (`33`) | 既存 Zig syntax |
+| comment / identifier / punctuation | gray (`90`) / default (`39`) / blue (`34`) | 既存 Zig syntax |
+
+`RESOLUTION` を `SEMANTICS` とし、12-column key width で整列。backend名は通常 status から除き、既存JSONへ保持。title の下に byte length 分の Unicode separator。section 間は1空行、heading と body の間は空行なし、body は2-space indent。doc の段落と原文は維持し、prose / inline backticks は色付けしません。source/version は secondary。`--man` は SOURCE の前に Host page / Relation を表示し、host の manual と Zig doc を区別します。
+
+`Returns` は既存 `returns_type=true` の場合にだけ表示します。`std.os.linux.write` の `usize` を新たな semantic metadata として推測・生成していません。manual reference の表示は既存 `--man` flag を維持し、通常の write lookup では自動追加しません。
+
+## Actual plain output
+
+### `zman std.ArrayListUnmanaged`
+
+```text
+std.ArrayListUnmanaged
+──────────────────────
+
+TYPE FACTORY
+
+SEMANTICS
+  Status      resolved
+  Alias of    std.ArrayList
+  Returns     type
+
+SIGNATURE
+  pub fn ArrayList(comptime T: type) type
+
+DESCRIPTION
+  A contiguous, growable list of items in memory. This is a wrapper around a
+  slice of `T` values.
+
+  The same allocator must be used throughout its entire lifetime. Initialize
+  directly with `empty` or `initCapacity`, and deinitialize with `deinit` or
+  `toOwnedSlice`.
+
+SOURCE
+  /Users/mimoc/.zvm/0.17.0/lib/std/std.zig:52
+
+ZIG VERSION
+  0.17.0
+```
+
+### `zman std.os.linux.write`
+
+```text
+std.os.linux.write
+──────────────────
+
+FUNCTION
+
+SEMANTICS
+  Status      resolved
+
+SIGNATURE
+  pub fn write(fd: fd_t, buf: [*]const u8, count: usize) usize
+
+DESCRIPTION
+  No Zig documentation attached.
+
+SOURCE
+  /Users/mimoc/.zvm/0.17.0/lib/std/os/linux.zig:1787
+
+ZIG VERSION
+  0.17.0
+```
+
+`--man` を付けると同じ layout の SYSTEM MANUAL に `Host page   write(2)` と `Relation    direct` が加わります。
+
+### `zman std.posix.read --man`
+
+```text
+std.posix.read
+──────────────
+
+FUNCTION
+
+SEMANTICS
+  Status      resolved
+
+SIGNATURE
+  pub fn read(fd: fd_t, buf: []u8) ReadError!usize
+
+DESCRIPTION
+  Returns the number of bytes that were read, which can be less than
+  buf.len. If 0 bytes were read, that means EOF.
+  If `fd` is opened in non blocking mode, the function will return error.WouldBlock
+  when EAGAIN is received.
+
+  Linux has a limit on how many bytes may be transferred in one `read` call, which is `0x7ffff000`
+  on both 64-bit and 32-bit systems. This is due to using a signed C int as the return value, as
+  well as stuffing the errno codes into the last `4096` values. This is noted on the `read` man page.
+  The limit on Darwin is `0x7fffffff`, trying to read more than that returns EINVAL.
+  The corresponding POSIX limit is `maxInt(isize)`.
+
+SYSTEM MANUAL
+  Host page   read(2)
+  Relation    direct
+
+SOURCE
+  /Users/mimoc/.zvm/0.17.0/lib/std/posix.zig:402
+
+ZIG VERSION
+  0.17.0
+```
+
+## Verification
+
+- `zig build`: succeeded。
+- `zig build test`: **14/14 passed**（既存13 + hierarchy/golden/ANSI boundary test）。alias と manual の plain golden を追加し、ANSI を除去した結果と同一であることも確認。
+- `zig build integration`: **16/16 steps succeeded**。既存 semantic fixture / installed stdlib assertions を維持。
+- PTY で ArrayListUnmanaged / ArrayList / os.linux.write / posix.read --man の4例を確認。title/section/key/syntax/source の style boundary と prose の通常色を検証し、ANSI 除去後は plain と一致。
+- redirect auto、`--color=never`、`NO_COLOR`、`TERM=dumb` は ANSI なし。`--color=always` は redirect でも ANSI あり。NO_COLOR/TERM=dumb は always より優先。実際の `zman std.posix.read | cat` も ANSI なし。
+- 同じ cache/source を使用した公開 beta と4例の JSON を byte-by-byte 比較して一致。signature/doc comments/canonical source locations、backend metadata、schema を維持。
+- PTY の JSON + forced color/pager も ANSI なし、fake pager の marker が作成されず、pager 非実行を確認。
+- custom pager (`cat`) の PTY 出力、fake editor の source path argv、source command の plain 出力が beta と byte-identical、source highlight の維持を確認。
+- ReleaseSafe cross compile: aarch64-macos / aarch64-linux / x86_64-linux succeeded。3 archives の entries と全6 assets の checksum を検証。CLI version は `zman 1.0.0`。
+- `zig fmt --check`、`git diff --check` を実施。新規 dependency は0。semantic backend/search ranking/cache format/JSON fields は変更していません。
+
+## Changed files / release
+
+`src/style.zig`、`src/render.zig`、`src/highlight.zig`、`src/main.zig`、`src/man.zig`、`src/tests.zig`、`tests/golden/alias.txt`、`tests/golden/manual.txt`、`README.md`、`IMPLEMENTATION.md`、`build.zig.zon`。
+
+project version は1.0.0。ユーザーの確認により「pushせず」より正式公開を優先し、commit と v1.0.0 tag を push して既存 release workflow を使用します。ハイフンなしのタグは prerelease flag を付けず stable release を作成します。commit SHA と公開後の CI/Release 結果は最終報告に記載します。

@@ -62,10 +62,6 @@ pub fn reference(symbol: []const u8) ?Reference {
     for (mappings) |mapping| if (std.mem.eql(u8, mapping.symbol, symbol)) return mapping.reference;
     return null;
 }
-pub fn describe(a: std.mem.Allocator, ref: ?Reference) ![]const u8 {
-    if (ref) |r| return std.fmt.allocPrint(a, "SYSTEM MANUAL\n\nSystem manual on this host:\n    {s}({d}) [{s}]\n", .{ r.page, r.section, @tagName(r.relation) });
-    return a.dupe(u8, "SYSTEM MANUAL\n\nNo explicit system manual mapping for this symbol.\n");
-}
 // exe is injected in tests. Production always uses PATH's man, without a shell.
 pub fn open(io: std.Io, ref: Reference, exe: []const u8) !void {
     const section = [_]u8{'0' + ref.section};

@@ -46,7 +46,7 @@ archives and raw executables.
 For a published version (choose the matching target):
 
 ```sh
-version=0.2.0-beta.1
+version=1.0.0
 target=aarch64-macos  # or aarch64-linux / x86_64-linux
 archive="zman-v${version}-${target}.tar.gz"
 base="https://github.com/moribit/zman/releases/download/v${version}"
@@ -195,9 +195,8 @@ References use an explicit table with `direct` / `related` relations. Output say
 
 ```text
 SYSTEM MANUAL
-
-System manual on this host:
-    read(2) [direct]
+  Host page   read(2)
+  Relation    direct
 ```
 
 System manuals are a separate information source from Zig docs. macOS supplies
@@ -217,6 +216,13 @@ package install is attempted. Host man programs may apply their own formatting
 or pager behavior; zman invokes them with argv, without a shell.
 
 ### Terminal options
+
+Symbol titles have a separator, semantic kinds use bold, and all section headings
+share one cyan accent. `SEMANTICS` aligns keys and values; alias references use the
+same accent while labels, paths, and versions are secondary. Bodies use two-space
+indentation and keep the original documentation paragraphs. The same layout works
+without color. Autodoc backend details remain in JSON instead of the human status
+line. `SYSTEM MANUAL` uses `Host page` to distinguish host manuals from Zig docs.
 
 Color defaults to auto: stdout TTY, no `NO_COLOR`, and `TERM` other than `dumb`.
 Use `--color=auto|always|never` or `--no-color`. Explicit always permits redirected
@@ -281,7 +287,7 @@ zig build
 zig build test
 zig build integration
 zig build install --prefix /tmp/zman-install
-sh scripts/release.sh v0.2.0-beta.1 /tmp/zman-release
+sh scripts/release.sh v1.0.0 /tmp/zman-release
 ```
 
 Unit tests use small fixtures and injected man executables. Integration uses the
