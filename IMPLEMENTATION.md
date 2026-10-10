@@ -184,3 +184,98 @@ Linux はこの macOS 環境では実行せず compile のみ確認。外部 C l
 - inline container 内の `//!` 単独 docs は parent entry に統合しない。
 
 Phase 4 で compiler/autodoc の semantic 情報を利用する場合、alias の canonical/public path、conditional target selection、generic instantiated type の public members、宣言参照リンク、type 判別と container docs の対応付けが主な対象です。現在の source slices・位置情報・独立した Entry モデルを維持できます。
+
+---
+
+# Phase 4 implementation report — 0.2.0
+
+## Semantic (1–10)
+
+1. **Official backend:** installed Zig 0.17.0 の `lib/compiler/std-docs.zig`、`lib/docs/wasm/Walk.zig`、`Decl.zig` を調査しました。公式 [0.17.0 source archive](https://ziglang.org/download/0.17.0/zig-0.17.0.tar.xz) の `src/Compilation.zig` / `src/main.zig` も確認。`zig std` と `-femit-docs` は同じ autodoc backend を利用し、後者は HTML/JS/WASM/source archive を出力します。独立した full-semantic JSON export はありません。インストール済み backend の bytes は公式 archive と一致し、archive SHA256 は公式 [download index](https://ziglang.org/download/index.json) と照合しました。
+2. **Integration:** `semantic.zig` が syntax index を enrich します。source に埋め込んだ native driver を installed Zig でコンパイルし、installed Walk/Decl を実行。allocator を native arena に置換し、再帰 guard を追加しました。shipped `Decl.get_type_fn_return_expr` の古い `.node` accessor は 0.17 AST の `.opt_node.unwrap()` に合わせています。exact source anchor の一致を要求し、分類/lookup の公式ルールは変更していません。neutral protocol → Entry の境界で AST/autodoc 型を隔離。backend 不在、不一致、parse/compile failure は警告して syntax-only に fallback します。
+3. **Aliases/re-exports:** official declaration ID / alias target を辿ります。`child.X`、`@import("child.zig").X`、namespace binding を fixture で確認。alias query の signature/docs/source は元宣言へ移り、alias binding は `alias_signature` / `alias_docs` / `alias_source` に保持します。
+4. **Canonical:** official std root の public edges から export path を構築。元の public direct declaration を優先し、次に最短 path、lexical 順で決定。filename を public namespace と見なしません。alias path も exact lookup 可能で、検索結果は canonical target 単位に重複排除します。
+5. **Cycles:** official traversal に file/node/operation/child-name の recursion stack guard、alias chase に visited IDs を使用。実 cycle は `cyclic`、深さ上限到達は `unresolved`。export traversal に ancestor/depth/entry cap。A→B→C→A と cyclic field access の fixture が成功し、無限再帰しません。
+6. **`@This()`:** official namespace scope が提供する alias link を採用。public `DirectType.Self` と private `Foo.Self` を確認。private link は source locations を持つ `relationships` に保存。generic factory 内で Self を function 自体へ誤リンクする場合は unresolved にします。
+7. **Type/const:** official category を別 `semantic_kind` として保持。primitive type alias、container type、literal constant、function/namespace を分類。autodoc の fallback const、conditional branch の heuristic を採用できない場合は unknown/unresolved。source syntax の `kind` は互換性のため保持します。
+8. **Generic:** literal `type` return を official type-function category と併せて `TYPE FACTORY` / `returns_type=true` と表示。literal returned container に属する public members のみ公開します。unused local container の `phantom` member を除外する回帰テストを追加。任意 instantiation engine はありません。
+9. **Real stdlib:** `std.ArrayList` = type factory、`std.ArrayListUnmanaged` → `std.ArrayList` alias、`std.mem.Allocator` = type、`std.os.linux.fd_t` = primitive type alias、`std.math.pi` = constant、`array_list.zig` の private Self links、`std.posix.read` の原文 signature を実際の installed stdlib で検証。macOS と Linux の双方で成功しました。
+10. **Limitations:** official autodoc は構造的 resolution であり full compiler semantic evaluation ではありません。conditional/computed imports、reflection/comptime-dependent expressions、generic instantiated members、複雑な `@This()`、opaque fallback classifications は未解決を優先。`ArrayList(u8).append` は評価しません。source parse はできても compiler として invalid な fixture を semantic proof として扱いません。
+
+## System man (11–16)
+
+11. **Mapping:** `man.zig` の明示 table で direct/related、page、section を管理。AI 推論、外部 database、shell concatenation はありません。Zig docs と host system manual は別 source として表示します。
+12. **Coverage:** 55 mappings、うち実際に存在する `std.posix` API は 23。Zig 0.17 の `std.posix` には open/write/close/socket/bind/listen/accept/connect/send/recv/epoll がありません。存在しない Zig path を捏造せず、`std.os.linux` の 19 syscall paths、`std.c` の 12 paths、related `std.Io.Dir.openFile` を併記しました。23 posix entries の存在は integration test で保証します。
+13. **`--man` actual output (excerpt):**
+
+    ```text
+    ZIG DOCUMENTATION
+
+    std.posix.read
+
+    FUNCTION
+
+    RESOLUTION
+
+    resolved (Zig autodoc)
+
+    SIGNATURE
+
+    pub fn read(fd: fd_t, buf: []u8) ReadError!usize
+
+    SOURCE
+
+    /Users/mimoc/.zvm/0.17.0/lib/std/posix.zig:402
+
+    SYSTEM MANUAL
+
+    System manual on this host:
+        read(2) [direct]
+    ```
+
+    DESCRIPTION には stdlib の原文 doc comments が表示されます。上記は省略表示で、独自生成した説明はありません。
+14. **Execution:** `zman man std.posix.read` は argv `man`, `2`, `read` を spawn。`--man` は reference 表示だけ。JSON は system_manual metadata のみで man を起動しません。
+15. **Host difference:** 最終 ARM64 release binary で macOS の Darwin READ(2) と Fedora 44 の Linux man-pages 6.13 read(2) を実際に開き、正常終了しました。Linux 版 manual と断定せず「on this host」と表示します。
+16. **Missing command/page:** FileNotFound は `man command not found`、exit 1/16 は `manual page read(2) is not installed on this host`、その他は concise failure。fake executable による argv、missing command、missing page tests は host man の存在に依存しません。package install は行いません。
+
+## Release (17–23)
+
+17. **CI:** `.github/workflows/ci.yml` は push/PR、Ubuntu 24.04/macOS 15、build/test/integration/temp install。`.zig-version` の 0.17.0 を公式 tarball と pinned SHA256 で setup。GitHub 公式 Actions は commit SHA pin、checkout credentials は保存しません。
+18. **Release:** `.github/workflows/release.yml` は v* tag、tag validation → tests → cross build → upload → publish。publish job だけ contents:write。公式 upload/download-artifact と GitHub CLI を利用。[GitHub hosted runners に gh が入っていること](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-github-cli) を確認しました。自動 notes は platform download list と checksum 案内。今回 tag push/Release publish は行っていません。
+19. **Targets:** aarch64-macos、aarch64-linux、x86_64-linux。最終 ReleaseSafe build は全 target 成功。`file` で Linux 両 binary の statically linked ELF を確認。ARM64 macOS/Linux は実行、Linux x86_64 は compile のみ。
+20. **Assets:** `zman-v0.2.0-<target>.tar.gz` と同名 raw binary。archive 内容は zman/LICENSE/README.md のみ。macOS AppleDouble が混入しないよう COPYFILE_DISABLE を指定。macOS binary は Developer ID signing/notarization 未対応です。
+21. **Checksums:** SHA256SUMS は 3 archive + 3 raw binary 全てを含みます。全 checksum と archive entries をローカル検証。`scripts/release.sh` を同じ output directory へ再実行して成功しました。
+22. **Install:** README の download/extract/checksum/`mkdir -p ~/.local/bin`/`install -m 755` 手順。source は `zig build -Doptimize=ReleaseSafe`、`zig build install --prefix ~/.local`。実検証は `/tmp/zman-phase4-install` へ install し `zman 0.2.0 / Zig docs: 0.17.0` を確認。
+23. **Version:** build.zig.zon の 0.2.0 が single project-version source。build options 経由で CLI version、scripts/version.sh 経由で archive/tag validation。v9.9.9 の negative test は build 前に拒否。Zig version は `.zig-version` に分離。
+
+## Quality / measurements (24–30)
+
+24. **Tests:** `zig build` 成功。`zig build test` は macOS/Fedora とも **13/13 passed**。alias/cycle/unknown、highlight/plain golden、search、cache corruption/old format、CLI flags、fake man argv/failure を含みます。`zig fmt --check` と diff whitespace check も実施。
+25. **Integration:** macOS/Fedora とも **16/16 build steps succeeded**。semantic fixture と real installed Zig stdlib、11 CLI invocations。plain pipe に ANSI なし、PTY auto color、NO_COLOR、JSON/man non-execution、alias type factory も最終 binary で確認。YAML parse、shell syntax check 成功。GitHub hosted workflow 自体は未実行です。
+26. **Cross compile:** 3 target 成功。Mac と Fedora の host-specific man 起動も確認。runtime の network access は利用していません。
+27. **Cache / memory:** 同じ macOS ARM64 host と Zig source に対する比較です。
+
+    | Metric | Phase 3 (0.1.0) | Phase 4 (0.2.0) |
+    | --- | ---: | ---: |
+    | Public index entries | 16,501 | 20,833 |
+    | Index cache bytes | 8,161,438 (7.78 MiB) | 14,633,177 (13.96 MiB) |
+    | Official declaration facts | — | 37,803 |
+    | Alias edges (incl. private) | — | 4,568 |
+    | Public alias paths | — | 1,956 |
+    | Resolved entries | — | 17,328 |
+    | Partially resolved | — | 86 |
+    | Unresolved | — | 3,419 |
+    | Cyclic public entries | — | 0 (fixture tests cycles) |
+    | Cached lookup maximum RSS | 66,994,176 bytes | 43,630,592 bytes |
+
+    Format 2 は `ZMAN\n2\n<Wyhash>\n<JSON payload>`。format/identity/checksum 不一致と破損は rebuild。version/executable/std path/target/adapter content revision/backend source metadata を identity に含め、読み込んだ source files と directories の size/mtime で invalidate。atomic temp rename。mtime/size を意図的に維持した編集を cryptographic content scan で検出する方式ではありません。native helper/compiler cache は別 storage で、上記 index size には含めません。cache JSON の二重 envelope を廃止し arena が input slices を保持するため、index が増えても cached RSS は低下しました。
+28. **Benchmark:** ReleaseSafe binary、5 runs の median、同じ host/source/既存 cache、subprocess wall time（OS cache や負荷で変動）。
+
+    | Query | Phase 3 | Phase 4 |
+    | --- | ---: | ---: |
+    | std.posix.read | 75.7 ms | 73.3 ms |
+    | open file | 98.9 ms | 103.2 ms |
+
+    helper 初回 compilation を含む reindex は約13–17秒、既存 helper で最終 reindex は0.712秒。cached query は compiler/helper を起動しません。最終 `open file` の1位は `std.Io.Dir.openFile`、続いて `std.Io.failingDirOpenFile`、`std.Io.Dir.OpenFileOptions`。query engine は引き続き deterministic ranking です。
+29. **Dependencies:** Zig stdlib のみ、third-party/build/runtime library dependency は0。libc link なし、SQLite/PCRE/tree-sitter/WASM runtime なし。index rebuild は PATH の installed Zig compiler を使用。man/pager/editor は optional external host tools、通常の lookup に必須ではありません。release/CI の compiler download は build automation のみに限定。
+30. **Phase 5 candidates:** compiler が安定した machine-readable semantic/autodoc export を提供した場合の backend、comptime-dependent target の official evaluation、既存 compiler metadata が提供する generic instances、より詳細な relationship browsing、man mapping 拡充、macOS signing/notarization。独自 semantic analyzer やネットワーク document retrieval は今回導入していません。

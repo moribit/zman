@@ -12,3 +12,5 @@ pub const Box = struct {
 pub const child = @import("child.zig");
 pub var counter: usize = 0;
 const hidden = 1;
+pub const ErrorSet = error{Bad};
+pub const ErrorValue = error.Bad;

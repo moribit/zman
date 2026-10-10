@@ -13,6 +13,8 @@ test "public AST declarations, docs, nested and imports" {
     try std.testing.expectEqualStrings("pub fn read(buf: []u8) usize", read.signature);
     try std.testing.expectEqualStrings("/// Reads bytes, unchanged.", read.docs);
     try std.testing.expect(search.exact(index.entries, "std.hidden") == null);
+    try std.testing.expect(index.entries[search.exact(index.entries, "std.ErrorSet").?].kind == .error_set);
+    try std.testing.expect(index.entries[search.exact(index.entries, "std.ErrorValue").?].kind == .@"const");
     try std.testing.expect(search.exact(index.entries, "std.Box.Mode") != null);
     try std.testing.expect(search.exact(index.entries, "std.child.answer") != null);
     const child = index.entries[search.exact(index.entries, "std.child").?];
@@ -62,4 +64,20 @@ test "dotted typo suggestions outrank partial prose" {
     const hits = try search.search(a, &entries, "posx.read", 10);
     try std.testing.expectEqual(@as(usize, 0), hits[0].entry_index);
     try std.testing.expect(hits[0].match_kind == .fuzzy);
+}
+
+test "old cache format and damaged checksum rebuild signals" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(io, ".", a);
+    const filename = try std.fs.path.join(a, &.{ root, "index" });
+    const cache = @import("cache.zig");
+    try tmp.dir.writeFile(io, .{ .sub_path = "index", .data = "ZMAN\n1\n0\n{}" });
+    try std.testing.expectError(error.CacheInvalidated, cache.load(a, io, filename, "id"));
+    try tmp.dir.writeFile(io, .{ .sub_path = "index", .data = "ZMAN\n2\n0\n{}" });
+    try std.testing.expectError(error.CacheCorruption, cache.load(a, io, filename, "id"));
 }

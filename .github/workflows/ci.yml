@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install pinned Zig with checksum verification
+        run: sh scripts/setup-zig.sh
+      - name: Build
+        run: zig build
+      - name: Unit tests
+        run: zig build test
+      - name: Installed stdlib and semantic integration
+        run: zig build integration
+      - name: Install verification
+        run: |
+          zig build install -Doptimize=ReleaseSafe --prefix "$RUNNER_TEMP/zman-install"
+          "$RUNNER_TEMP/zman-install/bin/zman" --version

@@ -82,7 +82,7 @@ pub const Builder = struct {
                         if (std.mem.startsWith(u8, resolved, self.root) and resolved.len > self.root.len and resolved[self.root.len] == std.fs.path.sep) import_path = resolved;
                     }
                 }
-                if (tree.tokens.items(.tag)[tok] == .keyword_error) kind = .error_set;
+                if (tree.nodeTag(n) == .error_set_decl or tree.nodeTag(n) == .merge_error_sets) kind = .error_set;
             }
             if (container) |c| {
                 kind = switch (tree.tokens.items(.tag)[c.ast.main_token]) {

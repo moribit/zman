@@ -1,0 +1,65 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate tag against build.zig.zon
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: test "$RELEASE_TAG" = "v$(sh scripts/version.sh)"
+      - name: Install pinned Zig
+        run: sh scripts/setup-zig.sh
+      - name: Test
+        run: |
+          zig build
+          zig build test
+          zig build integration
+      - name: Build archives and raw binaries
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: sh scripts/release.sh "$RELEASE_TAG" dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh --version
+          cat > release-notes.md <<EOF
+          zman $RELEASE_TAG
+
+          Downloads:
+          - macOS ARM64 (unsigned)
+          - Linux ARM64
+          - Linux x86_64
+
+          Archives contain zman, LICENSE, and README.md.
+          SHA256SUMS covers every archive and raw binary.
+          EOF
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "zman $RELEASE_TAG" --notes-file release-notes.md

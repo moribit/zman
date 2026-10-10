@@ -106,10 +106,22 @@ pub fn search(a: std.mem.Allocator, entries: []const Entry, query: []const u8, l
             return std.mem.lessThan(u8, xn, yn);
         }
     }.less);
+    var groups: std.AutoHashMapUnmanaged(usize, void) = .empty;
+    defer groups.deinit(a);
+    var count: usize = 0;
+    for (results.items) |result| {
+        const entry = entries[result.entry_index];
+        const canonical = entry.target_entry orelse result.entry_index;
+        const gop = try groups.getOrPut(a, canonical);
+        if (gop.found_existing) continue;
+        results.items[count] = result;
+        count += 1;
+    }
+    results.items.len = count;
     if (dotted and results.items.len > 0 and results.items[0].match_kind == .fuzzy) {
-        var count: usize = 0;
-        while (count < results.items.len and results.items[count].match_kind == .fuzzy) : (count += 1) {}
-        results.items.len = count;
+        var fuzzy_count: usize = 0;
+        while (fuzzy_count < results.items.len and results.items[fuzzy_count].match_kind == .fuzzy) : (fuzzy_count += 1) {}
+        results.items.len = fuzzy_count;
     }
     results.items.len = @min(limit, results.items.len);
     return results.toOwnedSlice(a);
