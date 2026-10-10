@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible lookup, output, or integration problem.
+body:
+  - type: input
+    id: zman_version
+    attributes:
+      label: zman version
+      description: Output from zman --version.
+    validations:
+      required: true
+  - type: input
+    id: zig_version
+    attributes:
+      label: Zig version
+      description: Output from zig version.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and architecture
+      placeholder: macOS aarch64 or Fedora Linux x86_64, including OS version
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Exact command and relevant color/pager/editor environment settings.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output
+      description: Include stdout and stderr.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Small source fixture, installation method, or reproduction details.

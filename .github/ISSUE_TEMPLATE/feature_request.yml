@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a focused improvement to local Zig documentation workflows.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What task is difficult today? Include a concrete workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe the command or output you would expect.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Existing commands or other approaches you considered.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and project principles
+      description: Explain source fidelity, semantic uncertainty, dependencies, and network impact.
+    validations:
+      required: true

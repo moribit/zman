@@ -1,1 +1,1 @@
- .{ .name = .zman, .version = "1.0.0", .fingerprint = 0xb325d12e2cecef71, .minimum_zig_version = "0.17.0", .paths = .{ "build.zig", "build.zig.zon", "src", "tests", "README.md", "LICENSE", "scripts", ".github", ".zig-version", "IMPLEMENTATION.md" } }
+ .{ .name = .zman, .version = "1.0.0", .fingerprint = 0xb325d12e2cecef71, .minimum_zig_version = "0.17.0", .paths = .{ "build.zig", "build.zig.zon", "src", "tests", "README.md", "LICENSE", "scripts", ".github", ".zig-version", "IMPLEMENTATION.md", "docs", "CONTRIBUTING.md", "CHANGELOG.md" } }

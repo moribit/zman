@@ -1,3 +1,9 @@
+# Implementation history
+
+This file preserves historical phase reports, output, and measurements. Current
+usage and design are documented in [README.md](README.md) and [docs/](docs/architecture.md).
+Older output/layouts below describe their recorded versions, not current behavior.
+
 # Phase 1–3 完了報告
 
 検証環境: Zig 0.17.0 / macOS aarch64。本文の説明はすべてインストール済み Zig の source/doc comment から抽出し、独自生成していません。
