@@ -62,4 +62,8 @@ jobs:
           Archives contain zman, LICENSE, and README.md.
           SHA256SUMS covers every archive and raw binary.
           EOF
-          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "zman $RELEASE_TAG" --notes-file release-notes.md
+          set --
+          case "$RELEASE_TAG" in
+            *-*) set -- --prerelease --latest=false ;;
+          esac
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "zman $RELEASE_TAG" --notes-file release-notes.md "$@"

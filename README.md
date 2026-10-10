@@ -46,7 +46,7 @@ archives and raw executables.
 For a published version (choose the matching target):
 
 ```sh
-version=0.2.0
+version=0.2.0-beta.1
 target=aarch64-macos  # or aarch64-linux / x86_64-linux
 archive="zman-v${version}-${target}.tar.gz"
 base="https://github.com/moribit/zman/releases/download/v${version}"
@@ -281,7 +281,7 @@ zig build
 zig build test
 zig build integration
 zig build install --prefix /tmp/zman-install
-sh scripts/release.sh v0.2.0 /tmp/zman-release
+sh scripts/release.sh v0.2.0-beta.1 /tmp/zman-release
 ```
 
 Unit tests use small fixtures and injected man executables. Integration uses the
